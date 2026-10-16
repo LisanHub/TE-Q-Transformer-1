@@ -1,4 +1,4 @@
-# TE-Q-Transformer: A Temperature-Embedded Quantum Framework for Battery State-of-Health Estimation
+# Physics-Guided Temperature-Embedded Quantum Transformer for Lithium-Ion Battery State-of-Health Estimation
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-ee4c2c.svg)](https://pytorch.org/)
@@ -22,56 +22,7 @@ TE-Q-Transformer is a hybrid quantum-classical deep learning framework for lithi
 
 ## Model Architecture
 
-The TE-Q-Transformer architecture processes multi-channel cycle sequences through the following sequential stages:
-
-```
-Input [B, 512, 4]
-       │
-       ├── Channel 2 (Temp C) ──> Arrhenius Transform ──> θ_temp
-       └── Channels 0, 1, 3 (V, I, t) ─────────────────> θ_v, θ_i, θ_t
-                                                               │
-                                                               ▼
-                                                  4-Qubit Variational Circuit
-                                                  (PennyLane default.qubit)
-                                                               │
-                                                               ▼
-                                                  Pauli-Z Expectation [B, 512, 4]
-                                                               │
-                                                               ▼
-                                                  Linear Projection (d_model = 64)
-                                                               │
-                                                               ▼
-                                                  Conv1D Temporal Smoothing (k = 3)
-                                                               │
-                                                               ▼
-                                                  Prepend [CLS] + Positional Encoding
-                                                               │
-                                                               ▼
-                                                  3-Layer Transformer Encoder
-                                                               │
-                                                               ▼
-                                                  Extract [CLS] Token
-                                                               │
-                                                               ▼
-                                                  MLP Regression Head
-                                                               │
-                                                               ▼
-                                                  SOH Output [B]
-```
-
-1. **Input Sequence**: Each battery discharge cycle is represented as a fixed-length tensor of shape `[B, 512, 4]` corresponding to Voltage, Current, Temperature in Celsius, and Normalized Time within the discharge cycle.
-2. **Physics-Guided Arrhenius Temperature Representation**: Temperature values ($T_C$) are converted to Kelvin ($T_K = T_C + 273.15$) and passed through a dual Arrhenius kinetic transformation:
-   $$\phi(T) = \exp\left(\frac{E_{a,\text{sei}}}{R}\left(\frac{1}{T_{\text{ref}}} - \frac{1}{T_K}\right)\right) + \exp\left(\frac{E_{a,\text{pl}}}{R}\left(\frac{1}{T_K} - \frac{1}{T_{\text{ref}}}\right)\right)$$
-   $$\theta_{\text{temp}} = \frac{\pi \cdot \phi(T)}{4}$$
-   where $R = 8.314\,\text{J/(mol}\cdot\text{K)}$, $T_{\text{ref}} = 298.15\,\text{K}$, and $E_{a,\text{sei}}$, $E_{a,\text{pl}}$ are trainable empirical activation parameters initialized from electrochemical literature.
-3. **Four-Qubit Quantum Feature Map**: Implemented via PennyLane using the `default.qubit` state-vector simulator. The 4 features are mapped to rotational angles across 4 qubits. The circuit applies a rich entangler consisting of RZ rotations, a CNOT ladder, IsingZZ couplings, multi-qubit Toffoli gates, and Hadamard layers.
-4. **Quantum Readout**: Computes Pauli-Z expectation values $\langle \sigma_z^i \rangle$ on all four qubits, returning a 4-dimensional vector per time step.
-5. **Linear Projection**: Projects the 4-dimensional quantum representation into the latent model dimension ($d_{\text{model}} = 64$).
-6. **Conv1D Temporal Smoothing**: Applies a 1D convolution (`kernel_size=3`, `padding=1`) along the sequence length dimension.
-7. **Transformer Encoder Backbone**: Prepends a learnable `[CLS]` token, adds sinusoidal positional encodings, and processes the sequence through 3 Transformer encoder layers (`nhead=2`, `dim_feedforward=64`, GELU activation, pre-layer normalization).
-8. **SOH Regression Head**: Extracts the transformed `[CLS]` token representation and passes it through an MLP head (`Linear(64, 64) -> GELU -> Dropout -> Linear(64, 1)`) to predict a scalar State of Health ($C_k / C_0$) for the cycle.
-
-*Note on Quantum Simulation*: All quantum operations are executed classically via state-vector simulation in PennyLane. The parameterized quantum circuit functions as a non-linear feature transformation layer.
+![TE-Q-Transformer Architecture](assets/TE-Q-Architecture-Final.png)
 
 ---
 
